@@ -37,7 +37,7 @@ const EXT_TABLE: [(ExtId, &ffi::CStr, bool); ExtId::Count as usize] = [
     (ExtId::KhrDriverProperties,        ash::khr::driver_properties::NAME,          false),
     (ExtId::KhrExternalMemoryFd,        ash::khr::external_memory_fd::NAME,         true),
     (ExtId::KhrImageFormatList,         ash::khr::image_format_list::NAME,          false),
-    (ExtId::KhrMaintenance4,            ash::khr::maintenance4::NAME,               true),
+    (ExtId::KhrMaintenance4,            ash::khr::maintenance4::NAME,               false),
     (ExtId::ExtExternalMemoryDmaBuf,    ash::ext::external_memory_dma_buf::NAME,    true),
     (ExtId::ExtImageCompressionControl, ash::ext::image_compression_control::NAME,  false),
     (ExtId::ExtImageDrmFormatModifier,  ash::ext::image_drm_format_modifier::NAME,  false),
@@ -434,7 +434,11 @@ impl PhysicalDevice {
         self.properties.max_image_dimension_2d = limits.max_image_dimension2_d;
         self.properties.max_uniform_buffer_range = limits.max_uniform_buffer_range;
         self.properties.max_storage_buffer_range = limits.max_storage_buffer_range;
-        self.properties.max_buffer_size = maint4_props.max_buffer_size;
+        self.properties.max_buffer_size = if maint4_props.max_buffer_size > 0 {
+            maint4_props.max_buffer_size
+        } else {
+            u32::MAX as vk::DeviceSize
+        };
 
         Ok(())
     }
