@@ -290,15 +290,24 @@ impl PhysicalDevice {
         let handles = unsafe { self.instance.handle.enumerate_physical_devices() }
             .or(Error::ctx("failed to enumerate devices"))?;
 
-        let dev_info = handles.into_iter().enumerate().find_map(|(idx, handle)| {
+        let mut dev_info = None;
+        for (idx, handle) in handles.into_iter().enumerate() {
             if let Some(dev_idx) = dev_idx {
                 if dev_idx != idx {
-                    return None;
+                    continue;
                 }
             }
 
-            self.probe(handle, dev_id).ok()
-        });
+            match self.probe(handle, dev_id) {
+                Ok(info) => {
+                    dev_info = Some(info);
+                    break;
+                }
+                Err(e) => {
+                    log::error!("probe failed for device {}: {:?}", idx, e);
+                }
+            }
+        }
 
         dev_info.ok_or(Error::Context("failed to find any device"))
     }
@@ -349,12 +358,14 @@ impl PhysicalDevice {
             });
 
             if required && !dev_info.extensions[idx] {
-                return Error::unsupported();
+                log::error!("Missing required extension: {:?}", name);
+                return Error::ctx("Missing required extension");
             }
         }
 
         if dev_id.is_some() && !dev_info.extensions[ExtId::ExtPhysicalDeviceDrm as usize] {
-            return Error::unsupported();
+            log::error!("Missing VK_EXT_physical_device_drm");
+            return Error::ctx("Missing VK_EXT_physical_device_drm");
         }
 
         self.properties.ext_image_drm_format_modifier =
@@ -384,9 +395,15 @@ impl PhysicalDevice {
 
         let props = &props.properties;
 
-        has_api_version(props.api_version)?;
+        if let Err(e) = has_api_version(props.api_version) {
+            log::error!("unsupported api version: {}", props.api_version);
+            return Err(e);
+        }
         if let Some(dev_id) = dev_id {
-            has_device_id(drm_props, dev_id)?;
+            if let Err(e) = has_device_id(drm_props, dev_id) {
+                log::error!("device id mismatch");
+                return Err(e);
+            }
         }
 
         self.properties.driver_id = drv_props.driver_id;
